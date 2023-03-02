@@ -211,7 +211,7 @@ def online_monitoring(weights,training_metrics,metric_names,i_step,start_time):
     display.display(fig_)
 
 
-def plot_results_std(ax, results, coefs, metric_names, xlabel, metric, legend, color, ylabel, ymax=None, ymin=None, xmax=None, xmin=None, do_legend=False, log_x=False, log_y=False, quantile=False, plot_all_points=False, min_log_val = 1e-5):
+def plot_results_std(ax, results, coefs, metric_names, xlabel, metric, legend, color, ylabel, ymax=None, ymin=None, xmax=None, xmin=None, do_legend=False, log_x=False, log_y=False, quantile=False, plot_all_points=False, min_log_val = 1e-5, marker = 'P'):
 
     results = results[...,metric_names.index(metric)].clone().cpu()
 
@@ -237,15 +237,15 @@ def plot_results_std(ax, results, coefs, metric_names, xlabel, metric, legend, c
         top_ = mean_ + std_
 
     if log_x and log_y:
-        ax.loglog(coefs, mean_, 'P',color=color, markeredgecolor='white', markersize=10, label=legend)
+        ax.loglog(coefs, mean_, marker,color=color, markeredgecolor='white', markersize=10, label=legend)
     elif log_x:
-        ax.semilogx(coefs, mean_, 'P',color=color, markeredgecolor='white', markersize=10, label=legend)
+        ax.semilogx(coefs, mean_, marker,color=color, markeredgecolor='white', markersize=10, label=legend)
     elif log_y:
         if (mean_==0).sum()>0: print(f'zero values are set as {min_log_val}')
         mean_[mean_==0] = min_log_val
-        ax.plot(coefs, np.log10(mean_), 'P',color=color, markeredgecolor='white', markersize=10, label=legend)
+        ax.plot(coefs, np.log10(mean_), marker,color=color, markeredgecolor='white', markersize=10, label=legend)
     else:
-        ax.plot(coefs, mean_, 'P',color=color, markeredgecolor='white', markersize=10, label=legend)
+        ax.plot(coefs, mean_, marker,color=color, markeredgecolor='white', markersize=10, label=legend)
     if log_y:
         bottom_[bottom_==0] = min_log_val
         top_[top_==0] = min_log_val

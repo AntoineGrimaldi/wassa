@@ -87,23 +87,36 @@ def spike_times_diff(true_spike_times, estimated_spike_times, min_warping_coef =
     error_matrix = torch.inf*torch.ones([n_kernels,n_motifs])
     for m in range(n_motifs):
         for k in range(n_kernels):
-            if min_warping_coef<1:
-                true_t_norm = normalize_times(true_spike_times[m])
-                estimated_t_norm = normalize_times(estimated_spike_times[k])
-                stretch_values = np.linspace(.5, 1.5, 10)
-                diff = np.inf
-                for s in stretch_values:
-                    error = np.sum(np.abs(true_t_norm - estimated_t_norm*s))
-                    if error < diff:
-                        diff = error
-            else:
-                diff = 0
-                for ind in range(len(true_spike_times[m])):
-                    true_neuron, true_time = true_spike_times[m][ind]
-                    estimated_time = estimated_spike_times[k][true_neuron]
-                    diff += abs(true_time-estimated_time)
+            diff = 0
+            for ind in range(len(true_spike_times[m])):
+                true_neuron, true_time = true_spike_times[m][ind]
+                estimated_time = estimated_spike_times[k][true_neuron]
+                diff += abs(true_time-estimated_time)
             error_matrix[k,m] = diff/len(true_spike_times[m])
     return find_closest(error_matrix,'min')
+
+#def spike_times_diff(true_spike_times, estimated_spike_times, min_warping_coef = 1):
+#    n_motifs, n_kernels = len(true_spike_times), len(estimated_spike_times)
+#    error_matrix = torch.inf*torch.ones([n_kernels,n_motifs])
+#    for m in range(n_motifs):
+#        for k in range(n_kernels):
+#            if min_warping_coef<1:
+#                true_t_norm = normalize_times(true_spike_times[m])
+#                estimated_t_norm = normalize_times(estimated_spike_times[k])
+#                stretch_values = np.linspace(.5, 1.5, 10)
+#                diff = np.inf
+#                for s in stretch_values:
+#                    error = np.sum(np.abs(true_t_norm - estimated_t_norm*s))
+#                    if error < diff:
+#                        diff = error
+#            else:
+#                diff = 0
+#                for ind in range(len(true_spike_times[m])):
+#                    true_neuron, true_time = true_spike_times[m][ind]
+#                    estimated_time = estimated_spike_times[k][true_neuron]
+#                    diff += abs(true_time-estimated_time)
+#            error_matrix[k,m] = diff/len(true_spike_times[m])
+#    return find_closest(error_matrix,'min')
 
 def get_similarity(sm, autoencoder, testset_input, metric_names, spike_times=None, verbose=False):
 
@@ -138,7 +151,7 @@ def get_similarity(sm, autoencoder, testset_input, metric_names, spike_times=Non
         if metric == 'kernels similarity':
             results[ind_m] = correlation_kernels(sm.SMs, learnt_weights)
         if metric == 'mean timings similarity':
-            results[ind_m] = correlation_mean_timings(mean_timings, learnt_weights,norm=1)
+            results[ind_m] = correlation_mean_timings(mean_timings, learnt_weights,norm=2)
         if metric=='mean time diff':
             if spike_times is not None:
                 results[ind_m] = spike_times_diff(true_spike_times, spike_times, min_warping_coef = sm.opt['min_warping_coef'])
