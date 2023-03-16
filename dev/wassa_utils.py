@@ -172,3 +172,20 @@ def compute_seqnmf(sm, dataset, training_parameters, metric_names, synthetic_met
                 results[i,k,:] = get_similarity(sm, autoencoder, testset, synthetic_metrics)
     return results
 
+def make_sparse_patches(rp_input, reconstruction, indices_time, patch_size):
+    B, K, topk = indices_time.shape
+    N = reconstruction.shape[1]
+    T = reconstruction.shape[2]
+
+    offsets = torch.arange(patch_size, device=reconstruction.device)
+    time_idx = indices_time.unsqueeze(-1) + offsets
+    time_idx = torch.clamp(time_idx, 0, T - 1)
+    time_idx = time_idx.unsqueeze(3).expand(-1, -1, -1, N, -1)
+
+    recon = reconstruction.unsqueeze(1).unsqueeze(1).expand(-1,K,topk,-1,-1)
+    rp_input = rp_input.unsqueeze(1).unsqueeze(1).expand(-1,K,topk,-1,-1)
+            
+    reconstruction_patch = torch.gather(recon,dim=-1,index=time_idx)
+    input_patch = torch.gather(rp_input,dim=-1,index=time_idx)
+
+    return reconstruction_patch.flatten(end_dim=2), input_patch.flatten(end_dim=2)

@@ -3,7 +3,7 @@ import numpy as np
 from dataset_generation import kfold_dataset
 from wassa import WassA
 from wassa_metrics import WassDist, get_similarity
-from wassa_utils import cross_correlation_comp, smoothing, kernels_similarity, correlation_kernels, factors_similarity, sparsity_kl, compute_factors_distributions, in_notebook
+from wassa_utils import make_sparse_patches, cross_correlation_comp, smoothing, kernels_similarity, correlation_kernels, factors_similarity, sparsity_kl, compute_factors_distributions, in_notebook
 from wassa_plots import online_monitoring
 import adamw_eg
 if in_notebook():
@@ -56,14 +56,13 @@ def learn_motifs(model,training_set,testing_set,training_parameters,path,metric_
                     
                 optimizer.zero_grad()
                 factors_train, reconstruction, indices_time = model(X)
-                
+
                 if training_parameters['topk'] is not None:
-                    indices = torch.flatten(indices_time,start_dim=1).to('cpu')
-                    all_indices = torch.flatten(torch.from_numpy(np.linspace(indices,indices+training_parameters['kernel_size'][2]*torch.ones_like(indices),num=training_parameters['kernel_size'][2]+1,axis=2)).to(torch.int64),start_dim=1).unsqueeze(1).repeat(1,training_parameters['kernel_size'][1],1)
-                    reconstruction = torch.gather(reconstruction,2,all_indices.to(reconstruction.device)).reshape([indices.shape[0]*indices.shape[1],training_parameters['kernel_size'][1],training_parameters['kernel_size'][2]+1])
-                    X = torch.gather(X,2,all_indices.to(X.device)).reshape([indices.shape[0]*indices.shape[1],training_parameters['kernel_size'][1],training_parameters['kernel_size'][2]+1])
+                    reconstruction_patch, X_patch = make_sparse_patches(X, reconstruction, indices_time, training_parameters['kernel_size'][2])
+                    loss = criterion(reconstruction_patch, X_patch)
+                else:
+                    loss = criterion(reconstruction,X)
                     
-                loss = criterion(reconstruction,X)
                 penalty_value = penalty(model,factors_train,training_parameters)
                 loss += penalty_value
 

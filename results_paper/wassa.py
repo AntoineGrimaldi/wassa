@@ -39,7 +39,7 @@ class WassA(torch.nn.Module):
         
         if self.do_bias:
             x_hat += self.bias.unsqueeze(0).unsqueeze(2).repeat(n_sample,1,n_timesteps)
-            
+
         return z, x_hat
 
     def normalization(self):

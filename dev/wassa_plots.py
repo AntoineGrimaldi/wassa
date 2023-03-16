@@ -20,17 +20,21 @@ def plot_results(training_metrics, metrics_names, trained_layer_of_neurons, inpu
     figsize_kernels = (12.75,2)
     if trained_layer_of_neurons.tied_weights:
         N_SMs, N_pre, N_delays = trained_layer_of_neurons.weights.shape
+        if true_weights is not None:
+             _, _, sorted_indices = plot_SM(true_weights, figsize=figsize_kernels, N_show = N_SMs, order_sms = order_sms, ground_truth=True);
         weights = trained_layer_of_neurons.weights.data.detach().cpu()
-        plot_SM(weights, figsize=figsize_kernels, N_show = N_SMs, order_sms = order_sms);
+        plot_SM(weights, figsize=figsize_kernels, N_show = N_SMs, order_sms = order_sms,sorted_indices=sorted_indices);
     else:
         N_SMs, N_pre, N_delays = trained_layer_of_neurons.decoder[0].weight.shape
         decoding_weights = trained_layer_of_neurons.decoder[0].weight.data.detach().cpu()
         encoding_weights = trained_layer_of_neurons.encoder[0].weight.data.detach().cpu()
-        plot_SM(encoding_weights, figsize=figsize_kernels, N_show = N_SMs, order_sms = order_sms);
-        plot_SM(decoding_weights, figsize=figsize_kernels, N_show = N_SMs, order_sms = order_sms);
-    if true_weights is not None:
-        plot_SM(true_weights, figsize=figsize_kernels, N_show = N_SMs, order_sms = order_sms);
+        if true_weights is not None:
+             _, _, sorted_indices = plot_SM(true_weights, figsize=figsize_kernels, N_show = N_SMs, order_sms = order_sms, ground_truth=True);
+        plot_SM(encoding_weights, figsize=figsize_kernels, N_show = N_SMs, order_sms = order_sms,sorted_indices=sorted_indices);
+        plot_SM(decoding_weights, figsize=figsize_kernels, N_show = N_SMs, order_sms = order_sms,sorted_indices=sorted_indices);
 
+    original_value = trained_layer_of_neurons.top_k
+    trained_layer_of_neurons.top_k = None
     factors, reconstruction, _ = trained_layer_of_neurons(input_raster_plot)
     N_sample, _, _ = input_raster_plot.shape
     random_ind = torch.randint(N_sample,[1])
@@ -93,18 +97,22 @@ def plot_raster(raster, title = 'raster plot'):
 
     return fig, ax
 
-def plot_SM(SMs, N_show = 5, order_sms=False, cmap='Purples', colors=None, aspect=None, figsize = (12, 1.61803)):
+def plot_SM(SMs, N_show = 5, order_sms=False, sorted_indices = None, ground_truth = False, cmap='Purples', colors=None, aspect=None, figsize = (12, 1.61803)):
     subplotpars = matplotlib.figure.SubplotParams(left=0.125, right=.95, bottom=0.25, top=.975, wspace=0.05, hspace=0.05,)
 
     SMs = SMs.to('cpu')
 
-    cmap_2 = matplotlib.colormaps['Set1']
+    if ground_truth:
+        cmap_2 = matplotlib.colormaps['Set3']
+    else:
+        cmap_2 = matplotlib.colormaps['tab10']
     
     N_SMs, N_pre, N_delays = SMs.shape
     steps_pre = N_pre/10
     N_show = min(N_show, N_SMs)
         
     fig, axs = plt.subplots(1, N_show, figsize=figsize, subplotpars=subplotpars)
+    all_indices = []
     for i_SM in range(N_show):
         if N_show>1:
             ax = axs[i_SM]
@@ -112,9 +120,15 @@ def plot_SM(SMs, N_show = 5, order_sms=False, cmap='Purples', colors=None, aspec
             ax = axs
         ax.set_axisbelow(True)
         if order_sms:
-            ordered_sm = SMs[i_SM,SMs[i_SM].argmax(dim=1).argsort(),:]
+            if sorted_indices is None:
+                sorted_ind = SMs[i_SM].argmax(dim=1).argsort()
+            else:
+                sorted_ind = all_indices[i_SM]
+            ordered_sm = SMs[i_SM,sorted_ind,:]
             ax.pcolormesh(ordered_sm, cmap=cmap, vmin=SMs.min(), vmax=SMs.max())
+            all_indices.append(sorted_ind)
         else:
+            all_indices = None
             ax.pcolormesh(SMs[i_SM], cmap=cmap, vmin=SMs.min(), vmax=SMs.max())
         ax.set_xlim(0, N_delays)
         ax.set_xlabel('spike latency')
@@ -139,7 +153,7 @@ def plot_SM(SMs, N_show = 5, order_sms=False, cmap='Purples', colors=None, aspec
         cbar = fig.colorbar(plt.cm.ScalarMappable(cmap=cmap), ax=axs, orientation='vertical', ticks=[0, 1],
                 format=matplotlib.ticker.FixedFormatter(np.round([SMs.min().item(), SMs.max().item()],3)))
 
-    return fig, axs
+    return fig, axs, sorted_indices
 
 def plot_hp_tuning(results, first_hp, second_hp, saved_hyperparameters, losses, metrics, fixed_hp = None, fixed_ind = [0], logplot = True, ymax = 1, ymin = 0, results_allen=True):
 
