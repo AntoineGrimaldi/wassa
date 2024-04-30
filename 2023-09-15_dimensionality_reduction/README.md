@@ -1,0 +1,5 @@
+## Creating raster plots generated from a basis of spiking motifs
+
+The model will generate raster plots (RP) with a superposition of spiking motifs (SM) defined by its kernels. These kernels are described by a *N_SMs $\times$ N_pre $\times$ N_delays* matrix (where *N_SMs* is the number of kernels or SMs, *N_pre* the number of neuron addresses and *N_delays* the time window on which SM are defined). Each kernels is defined by a number of spikes (*avg_nb_motifs*) drawn randomly in its kernel and convolved by a normal distribution that describes the temporal precision of the spike (with *avg_precision* and *std_precision* as parameters). These kernels are used as probability distributions to generate spikes through Bernoulli trials. 
+
+The raster plot as output is the overlapping of background noise and multiple SMs. One can define a number of timesteps for the RP (*N_timesteps*) and a number of trials (*N_trials*), an average *ISI* and *approx_SNR* (*~N_SMs/noise*) to caracterise the RP. 
