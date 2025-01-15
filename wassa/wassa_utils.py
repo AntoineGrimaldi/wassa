@@ -2,6 +2,7 @@ import torch, os, time
 from wassa.wassa import WassA
 from wassa.wassa_metrics import WassDist, torch_cdf_loss, correlation_latent_variables, correlation_kernels, kernels_diff
 from wassa.wassa_plots import plot_results
+from wassa.dataset_generation import generate_dataset
 from tqdm import tqdm
 
 def write_path(dir, date, world_params, training_params, iteration=0):
@@ -15,11 +16,37 @@ def smoothing(x,smoothing_window_size):
     
     device = x.device
     N_batch, N_kernel, N_timesteps = x.shape
-    #weights = gaussian_kernel(smoothing_window_size,smoothing_window_size//2,smoothing_window_size//10).unsqueeze(0).unsqueeze(0)/smoothing_window_size
     weights = torch.ones([1,1,smoothing_window_size], device=device)/smoothing_window_size
     flattened = torch.reshape(x.clone(), (N_batch*N_kernel, 1, N_timesteps))
-    smoothed = torch.nn.functional.conv1d(flattened, weights, padding='same')
+    smoothed = torch.nn.functional.conv1d(flattened, weights)
     return torch.reshape(smoothed, (N_batch, N_kernel, N_timesteps))
+
+def train_and_plot(sm, trainset_input, testset_input, testset_output, training_parameters, date, results_directory = '../results/', iteration = 0, plot = False, order_sms=True, verbose = False, device = 'cpu'):
+
+    if not os.path.exists(results_directory):
+        os.mkdir(results_directory)
+
+    autoencoder = WassA(training_parameters[0].kernel_size, weight_init = training_parameters[0].weight_init, output=training_parameters[0].output, do_bias=training_parameters[0].do_bias, device=device)
+    loss_evolution = []
+    for params in training_parameters:
+        if params.loss_type == 'mse':
+            loss = torch.nn.MSELoss()
+        else:
+            loss = WassDist(p=params.wass_order, zeros=params.zeros)
+        if len(training_parameters)==2:
+            path = write_path(results_directory, date+'_combined', sm.opt, params, iteration=iteration)
+            learnsteps_init = params.N_learnsteps
+            params.N_learnsteps = learnsteps_init//2
+        else:
+            path = write_path(results_directory, date, sm.opt, params, iteration=iteration)
+        autoencoder, loss_over_epochs = learn_offline(loss, autoencoder, trainset_input, params, path, verbose=verbose, device = device)
+        loss_evolution.append(loss_over_epochs)
+        
+        if len(training_parameters)==2: params.N_learnsteps = learnsteps_init
+
+    similarity_factors, similarity_kernels, similarity_means, mse, emd, emd_means = plot_results(sm, loss_evolution[-1], autoencoder, testset_input, testset_output, order_sms = order_sms, plot = plot, verbose = verbose, device = device)
+            
+    return similarity_factors, similarity_kernels, similarity_means, mse, emd, emd_means, loss_evolution, autoencoder
 
 def learn_offline(criterion, model, input_raster_plot, training_parameters, path, verbose=True, device='cpu'):
     
@@ -126,29 +153,110 @@ def orthogonality(factors):
         correlation_matrix += torch.corrcoef(normalized_factors[b])
     return (correlation_matrix.triu().sum()-torch.trace(correlation_matrix))/(N_batch*N_kernel*N_timesteps)
 
-def train_and_plot(dataset_parameters, sm, trainset_input, testset_input, testset_output, training_parameters, date, results_directory = '../results/', iteration = 0, plot = False, order_sms=True, verbose = False, device = 'cpu'):
 
-    if not os.path.exists(results_directory):
-        os.mkdir(results_directory)
+def performance_as_a_function_of_noise(dataset_parameters, params_emd, params_mse, date, coefficients, noise_type, N_iter = 5, seeds = None, device='cpu'):
+    
+    results = torch.zeros([3,N_iter,len(coefficients),3])
+    if seeds is not None:
+        assert seeds.size(0)==N_iter
+    else:
+        seeds = torch.randint(1000,[N_iter])
 
-    autoencoder = WassA(training_parameters[0].kernel_size, weight_init = training_parameters[0].weight_init, output=training_parameters[0].output, do_bias=training_parameters[0].do_bias, device=device)
-    loss_evolution = []
-    for params in training_parameters:
-        if params.loss_type == 'mse':
-            loss = torch.nn.MSELoss()
-        else:
-            loss = WassDist(p=params.wass_order, zeros=params.zeros)
-        if len(training_parameters)==2:
-            path = write_path(results_directory, date+'_combined', dataset_parameters, params, iteration=iteration)
-            learnsteps_init = params.N_learnsteps
-            params.N_learnsteps = learnsteps_init//2
-        else:
-            path = write_path(results_directory, date, dataset_parameters, params, iteration=iteration)
-        autoencoder, loss_over_epochs = learn_offline(loss, autoencoder, trainset_input, params, path, verbose=verbose, device = device)
-        loss_evolution.append(loss_over_epochs)
-        
-        if len(training_parameters)==2: params.N_learnsteps = learnsteps_init
+    file_name = f'results/{date}_performance_as_a_function_of_{noise_type}_{dataset_parameters().get_parameters()}_{params_emd.get_parameters()}_{coefficients[0]}_{coefficients[-1]}'
+    print(file_name)
+    
+    if os.path.isfile(file_name):
+        results, coefficients = torch.load(file_name, map_location='cpu')
+    else:
+        pbar = tqdm(total=int(results.numel()/9))
+        for ind_f, coef in enumerate(coefficients):
+            if noise_type == 'jitter':
+                dataset_parameters.temporal_jitter = coef
+            elif noise_type == 'additive':
+                dataset_parameters.additive_noise = coef
+            elif noise_type == 'dropout':
+                dataset_parameters.dropout_proba = coef
+            else:
+                print('Not recognized noise type')
+                break
+            for i in range(N_iter):
+                dataset_parameters.seed = seeds[i]
+                sm, trainset_input, trainset_output, testset_input, testset_output = generate_dataset(dataset_parameters,verbose = False, device=device)
+                results[0,i,ind_f,0], results[0,i,ind_f,1], results[0,i,ind_f,2], _, _, _, _, _ = train_and_plot(sm, trainset_input, testset_input, testset_output, [params_mse], date, iteration = i, device=device)
+                results[1,i,ind_f,0], results[1,i,ind_f,1], results[1,i,ind_f,2], _, _, _, _, _ = train_and_plot(sm, trainset_input, testset_input, testset_output, [params_emd], date, iteration = i, device=device)
+                results[2,i,ind_f,0], results[2,i,ind_f,1], results[2,i,ind_f,2], _, _, _, _, _ = train_and_plot(sm, trainset_input, testset_input, testset_output, [params_emd, params_mse], date, iteration = i, device=device)
+                
+                pbar.update(1)
 
-    similarity_factors, similarity_kernels, similarity_means, mse, emd, emd_means = plot_results(sm, loss_evolution[-1], autoencoder, testset_input, testset_output, order_sms = order_sms, plot = plot, verbose = verbose, device = device)
-            
-    return similarity_factors, similarity_kernels, similarity_means, mse, emd, emd_means, loss_evolution, autoencoder
+        pbar.close()
+        torch.save([results, coefficients], file_name)
+    return results, coefficients
+
+def performance_as_a_function_of_number_of_motifs(dataset_parameters, params_emd, params_mse, date, num_patterns, N_iter = 5, seeds = None, device='cpu'):
+    
+    freq_init = dataset_parameters.freq_sms[0]
+    
+    results = torch.zeros([3,N_iter,len(num_patterns),3])
+    if seeds is not None:
+        assert seeds.size(0)==N_iter
+    else:
+        seeds = torch.randint(1000,[N_iter])
+    
+    file_name = f'results/{date}_performance_as_a_function_of_number_of_motifs_{dataset_parameters().get_parameters()}_{params_emd.get_parameters()}_{num_patterns[0]}_{num_patterns[-1]}'
+    print(file_name)
+    
+    if os.path.isfile(file_name):
+        results, num_patterns = torch.load(file_name, map_location='cpu')
+    else:
+        pbar = tqdm(total=int(results.numel()/9))
+        for i in range(N_iter):
+            dataset_parameters.seed = seeds[i]
+            for ind_f, n_mot in enumerate(num_patterns):
+                dataset_parameters.N_SMs = n_mot
+                dataset_parameters.N_involved = dataset_parameters.N_pre*torch.ones(n_mot)
+                dataset_parameters.freq_sms = freq_init.div(n_mot)*torch.ones(n_mot)
+                params_emd.kernel_size = (n_mot,dataset_parameters.N_pre,dataset_parameters.N_delays)
+                params_mse.kernel_size = (n_mot,dataset_parameters.N_pre,dataset_parameters.N_delays)
+                sm, trainset_input, trainset_output, testset_input, testset_output = generate_dataset(dataset_parameters,verbose = False,device=device)
+                results[0,i,ind_f,0], results[0,i,ind_f,1], results[0,i,ind_f,2], _, _, _, _, _ = train_and_plot(sm, trainset_input, testset_input, testset_output, [params_mse], date, iteration = i, device=device)
+                results[1,i,ind_f,0], results[1,i,ind_f,1], results[1,i,ind_f,2], _, _, _, _, _ = train_and_plot(sm, trainset_input, testset_input, testset_output, [params_emd], date, iteration = i, device=device)
+                results[2,i,ind_f,0], results[2,i,ind_f,1], results[2,i,ind_f,2], _, _, _, _, _ = train_and_plot(sm, trainset_input, testset_input, testset_output, [params_emd, params_mse], date, iteration = i, device=device)
+                pbar.update(1)
+
+        pbar.close()
+        torch.save([results, num_patterns], file_name)
+    return results, num_patterns
+
+def performance_as_a_function_of_number_of_epochs(dataset_parameters, params_emd, params_mse, date, num_samples, N_iter = 5, seeds = None, device='cpu'):
+    
+    results = torch.zeros([2,N_iter,len(num_samples),5])
+    true_epochs = []
+    if seeds is not None:
+        assert seeds.size(0)==N_iter
+    else:
+        seeds = torch.randint(1000,[N_iter])
+    
+    dataset_parameters.N_samples = num_samples[-1]
+    dataset_parameters.seed = seeds[0]
+
+    file_name = f'results/{date}_performance_as_a_function_of_number_of_epochs_{dataset_parameters().get_parameters()}_{params_emd.get_parameters()}_{num_samples[0]}_{num_samples[-1]}'
+    print(file_name)
+    
+    if os.path.isfile(file_name):
+        results, true_epochs = torch.load(file_name, map_location='cpu')
+    else:
+        pbar = tqdm(total=int(results.numel()/10))
+        for i in range(N_iter):
+            dataset_parameters.seed = seeds[i]
+            sm, trainset_input, trainset_output, testset_input, testset_output = generate_dataset(dataset_parameters, verbose = False, device = device)
+            for ind_f, epoch in enumerate(num_samples):
+                dataset_parameters.N_samples = epoch
+                _, results[0,i,ind_f,0], results[0,i,ind_f,1], results[0,i,ind_f,2], results[0,i,ind_f,3], results[0,i,ind_f,4], _, _ = train_and_plot(sm, trainset_input[:epoch], testset_input[:epoch], testset_output[:epoch], [params_mse], date, iteration = i, device=device)
+                _, results[1,i,ind_f,0], results[1,i,ind_f,1], results[1,i,ind_f,2], results[1,i,ind_f,3], results[1,i,ind_f,4], _, _ = train_and_plot(sm, trainset_input[:epoch], testset_input[:epoch], testset_output[:epoch], [params_emd], date, iteration = i, device=device)
+                pbar.update(1)
+                if i==0:
+                    true_epochs.append(trainset_input[:epoch].shape[0])
+                
+        pbar.close()
+        torch.save([results, true_epochs], file_name)
+    return results, true_epochs

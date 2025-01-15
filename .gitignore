@@ -3,6 +3,7 @@ synthetic_data/
 .ipynb_checkpoints/
 build/
 results/
+dist/
 wassa.egg-info/
 wassa/__pycache__/
 2023-09-15_dimensionality_reduction/.ipynb_checkpoints/

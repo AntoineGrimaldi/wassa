@@ -6,13 +6,11 @@ def gaussian_kernel(n_steps, mu, std):
     return torch.exp(-(x-mu)**2/(2*std**2))/(std*torch.sqrt(torch.Tensor([2*torch.pi])))
     
 class sm_generative_model:
-    def __init__(self, opt, device='cpu'):
+    def __init__(self, dataset_parameters, device='cpu'):
         
-        assert opt.temporal_jitter>0, print(f'temporal jitter <= 0 creates issues')
-        
-        self.opt = opt
+        self.opt = dataset_parameters()
         self.device = device
-        torch.manual_seed(opt.seed)
+        torch.manual_seed(self.opt.seed)
         # initialization of the different spiking motifs probability distributions
         self.SMs = torch.zeros(self.opt.N_SMs, self.opt.N_pre, self.opt.N_delays, device = device)
         # average probability of having a spike for a specific timestep (homogeneous Poisson)
@@ -36,7 +34,10 @@ class sm_generative_model:
                 spike_times = torch.randint(int(self.opt.temporal_jitter), int(self.opt.N_delays-self.opt.temporal_jitter), [int(torch.round(N_spikes_per_motif[n]))])
                 self.spike_times.append((k,n,spike_times))
                 for s in range(len(spike_times)):
-                    self.SMs[k, n] += gaussian_kernel(self.opt.N_delays, spike_times[s], self.opt.temporal_jitter).to(device)
+                    if self.opt.temporal_jitter>0:
+                        self.SMs[k, n] += gaussian_kernel(self.opt.N_delays, spike_times[s], self.opt.temporal_jitter).to(device)
+                    else:
+                        self.SMs[self.spike_times[s]] = 1
         
         # normalize kernels to have each row suming to 1 (probability distribution)
         self.SMs.div_(torch.norm(self.SMs, p=1, dim=-1, keepdim=True)+1e-14)
@@ -111,7 +112,6 @@ class sm_generative_model:
                     
         return input_rp, output_rp
 
-
 def generate_dataset(parameters, record_path='../synthetic_data/', num_samples=None, verbose=True,  device='cpu'):
 
     if not os.path.exists(record_path):
@@ -122,12 +122,12 @@ def generate_dataset(parameters, record_path='../synthetic_data/', num_samples=N
     else:
         # divide into train (50%) and test (50%) sets
         num_train = num_test = parameters.N_samples//2
-    model_path = record_path+f'generative_model_'+parameters.get_parameters()
-    trainset_path = record_path+f'synthetic_rp_trainset_{num_train}_'+parameters.get_parameters()+'.pt'
-    testset_path = record_path+f'synthetic_rp_testset_{num_test}_'+parameters.get_parameters()+'.pt'
+    model_path = record_path+f'generative_model_'+parameters().get_parameters()
+    trainset_path = record_path+f'synthetic_rp_trainset_{num_train}_'+parameters().get_parameters()+'.pt'
+    testset_path = record_path+f'synthetic_rp_testset_{num_test}_'+parameters().get_parameters()+'.pt'
     if os.path.exists(model_path):
-        sm = torch.load(model_path, map_location = device)
-        sm.device = device
+        torch.serialization.add_safe_globals([sm_generative_model])
+        sm = torch.load(model_path, weights_only = True)
     else:
         sm = sm_generative_model(parameters, device=device)
         torch.save(sm, model_path)
@@ -137,10 +137,10 @@ def generate_dataset(parameters, record_path='../synthetic_data/', num_samples=N
             num = num_train
         elif dataset=='testset':
             num = num_test
-        dataset_path = record_path+f'synthetic_rp_{dataset}_{num}_'+parameters.get_parameters()+'.pt'
+        dataset_path = record_path+f'synthetic_rp_{dataset}_{num}_'+parameters().get_parameters()+'.pt'
         if verbose: print(dataset_path)
         if os.path.exists(dataset_path):
-            dataset_input_list, dataset_output_list = torch.load(dataset_path, map_location=device)
+            dataset_input_list, dataset_output_list = torch.load(dataset_path, map_location=device, weights_only = True)
             dataset_input = torch.zeros(num,parameters.N_pre,parameters.N_timesteps, device=device)
             dataset_output = torch.zeros(num,parameters.N_SMs,parameters.N_timesteps, device=device)
             dataset_input[dataset_input_list] = 1
