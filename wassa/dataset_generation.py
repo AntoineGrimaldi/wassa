@@ -126,8 +126,8 @@ def generate_dataset(parameters, record_path='../synthetic_data/', num_samples=N
     trainset_path = record_path+f'synthetic_rp_trainset_{num_train}_'+parameters().get_parameters()+'.pt'
     testset_path = record_path+f'synthetic_rp_testset_{num_test}_'+parameters().get_parameters()+'.pt'
     if os.path.exists(model_path):
-        torch.serialization.add_safe_globals([sm_generative_model])
-        sm = torch.load(model_path, weights_only = True)
+        #torch.serialization.add_safe_globals([sm_generative_model])
+        sm = torch.load(model_path, map_location=device)#, weights_only = True)
     else:
         sm = sm_generative_model(parameters, device=device)
         torch.save(sm, model_path)
@@ -140,7 +140,7 @@ def generate_dataset(parameters, record_path='../synthetic_data/', num_samples=N
         dataset_path = record_path+f'synthetic_rp_{dataset}_{num}_'+parameters().get_parameters()+'.pt'
         if verbose: print(dataset_path)
         if os.path.exists(dataset_path):
-            dataset_input_list, dataset_output_list = torch.load(dataset_path, map_location=device, weights_only = True)
+            dataset_input_list, dataset_output_list = torch.load(dataset_path, map_location=device)#, weights_only = True)
             dataset_input = torch.zeros(num,parameters.N_pre,parameters.N_timesteps, device=device)
             dataset_output = torch.zeros(num,parameters.N_SMs,parameters.N_timesteps, device=device)
             dataset_input[dataset_input_list] = 1

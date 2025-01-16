@@ -162,7 +162,7 @@ def performance_as_a_function_of_noise(dataset_parameters, params_emd, params_ms
     else:
         seeds = torch.randint(1000,[N_iter])
 
-    file_name = f'results/{date}_performance_as_a_function_of_{noise_type}_{dataset_parameters().get_parameters()}_{params_emd.get_parameters()}_{coefficients[0]}_{coefficients[-1]}'
+    file_name = f'../results/{date}_performance_as_a_function_of_{noise_type}_{dataset_parameters().get_parameters()}_{params_emd.get_parameters()}_{coefficients[0]}_{coefficients[-1]}'
     print(file_name)
     
     if os.path.isfile(file_name):
@@ -202,7 +202,7 @@ def performance_as_a_function_of_number_of_motifs(dataset_parameters, params_emd
     else:
         seeds = torch.randint(1000,[N_iter])
     
-    file_name = f'results/{date}_performance_as_a_function_of_number_of_motifs_{dataset_parameters().get_parameters()}_{params_emd.get_parameters()}_{num_patterns[0]}_{num_patterns[-1]}'
+    file_name = f'../results/{date}_performance_as_a_function_of_number_of_motifs_{dataset_parameters().get_parameters()}_{params_emd.get_parameters()}_{num_patterns[0]}_{num_patterns[-1]}'
     print(file_name)
     
     if os.path.isfile(file_name):
@@ -239,7 +239,7 @@ def performance_as_a_function_of_number_of_epochs(dataset_parameters, params_emd
     dataset_parameters.N_samples = num_samples[-1]
     dataset_parameters.seed = seeds[0]
 
-    file_name = f'results/{date}_performance_as_a_function_of_number_of_epochs_{dataset_parameters().get_parameters()}_{params_emd.get_parameters()}_{num_samples[0]}_{num_samples[-1]}'
+    file_name = f'../results/{date}_performance_as_a_function_of_number_of_epochs_{dataset_parameters().get_parameters()}_{params_emd.get_parameters()}_{num_samples[0]}_{num_samples[-1]}'
     print(file_name)
     
     if os.path.isfile(file_name):
