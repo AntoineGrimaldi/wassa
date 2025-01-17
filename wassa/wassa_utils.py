@@ -12,14 +12,17 @@ def gaussian_kernel(n_steps, mu, std):
     x = torch.arange(n_steps)
     return torch.exp(-(x-mu)**2/(2*std**2))/(std*torch.sqrt(torch.Tensor([2*torch.pi])))
 
-def smoothing(x,smoothing_window_size):
+def gets_neurons_order(SMs):
     
+    ordered_sm = SMs[i_SM,SMs[i_SM].argmax(dim=1).argsort(),:]
+
+def smoothing(x,smoothing_window_size):
     device = x.device
     N_batch, N_kernel, N_timesteps = x.shape
     weights = torch.ones([1,1,smoothing_window_size], device=device)/smoothing_window_size
     flattened = torch.reshape(x.clone(), (N_batch*N_kernel, 1, N_timesteps))
     smoothed = torch.nn.functional.conv1d(flattened, weights)
-    return torch.reshape(smoothed, (N_batch, N_kernel, N_timesteps))
+    return torch.reshape(smoothed, (N_batch, N_kernel, smoothed.shape[-1]))
 
 def train_and_plot(sm, trainset_input, testset_input, testset_output, training_parameters, date, results_directory = '../results/', iteration = 0, plot = False, order_sms=True, verbose = False, device = 'cpu'):
 
@@ -96,7 +99,7 @@ def learn_offline(criterion, model, input_raster_plot, training_parameters, path
                     elif training_parameters.penalty_type  == 'kernels_orthogonality':
                         loss += training_parameters.lambda_*kernels_orthogonality(model.decoding_weights)
                     elif training_parameters.penalty_type  == 'sparsity':
-                        loss += training_parameters.lambda_*factors.abs().mean()
+                        loss += training_parameters.lambda_*model.decoding_weights.abs().mean()
                     
                 LOSS.append(loss.clone().detach().cpu().numpy())
                 loss.backward()

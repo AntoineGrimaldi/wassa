@@ -7,7 +7,7 @@ from wassa.wassa_metrics import get_similarity
 def moving_average(x, w):
     return np.convolve(x, np.ones(w), 'valid') / w
 
-def plot_SM(SMs, N_show = 5, order_sms= False, cmap='Purples', colors=None, aspect=None, figsize = (12, 1.61803)):
+def plot_SM(SMs, N_show = 5, order_sms=False, cmap='Purples', colors=None, aspect=None, figsize = (12, 1.61803)):
     subplotpars = matplotlib.figure.SubplotParams(left=0.125, right=.95, bottom=0.25, top=.975, wspace=0.05, hspace=0.05,)
 
     SMs = SMs.to('cpu')
@@ -31,7 +31,7 @@ def plot_SM(SMs, N_show = 5, order_sms= False, cmap='Purples', colors=None, aspe
         else:
             ax.pcolormesh(SMs[i_SM], cmap=cmap, vmin=SMs.min(), vmax=SMs.max())
         ax.set_xlim(0, N_delays)
-        ax.set_xlabel('Delay')
+        ax.set_xlabel('spike latency')
         t = ax.text(.1*N_delays, .95*N_pre, f'#{i_SM+1}', color='k' if colors is None else colors[i_SM])
         t.set_bbox(dict(facecolor=cmap_2(i_SM), edgecolor='black'))
         if not aspect is None: ax.set_aspect(aspect)
@@ -45,11 +45,11 @@ def plot_SM(SMs, N_show = 5, order_sms= False, cmap='Purples', colors=None, aspe
         ax.xaxis.set_minor_locator(matplotlib.ticker.AutoMinorLocator(N_delays//4))
 
     if N_show>1:
-        axs[0].set_ylabel('@ Neuron')
+        axs[0].set_ylabel('neuron address')
         cbar = fig.colorbar(plt.cm.ScalarMappable(cmap=cmap), ax=axs[:], orientation='vertical', ticks=[0, 1],
                 format=matplotlib.ticker.FixedFormatter(np.round([SMs.min().item(), SMs.max().item()],3)))
     else:
-        axs.set_ylabel('@ Neuron')
+        axs.set_ylabel('neuron address')
         cbar = fig.colorbar(plt.cm.ScalarMappable(cmap=cmap), ax=axs, orientation='vertical', ticks=[0, 1],
                 format=matplotlib.ticker.FixedFormatter(np.round([SMs.min().item(), SMs.max().item()],3)))
 
