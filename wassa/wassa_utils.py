@@ -20,7 +20,7 @@ def smoothing(x,smoothing_window_size):
     device = x.device
     N_batch, N_kernel, N_timesteps = x.shape
     weights = torch.ones([1,1,smoothing_window_size], device=device)/smoothing_window_size
-    flattened = torch.reshape(x.clone(), (N_batch*N_kernel, 1, N_timesteps))
+    flattened = torch.reshape(x, (N_batch*N_kernel, 1, N_timesteps))
     smoothed = torch.nn.functional.conv1d(flattened, weights)
     return torch.reshape(smoothed, (N_batch, N_kernel, smoothed.shape[-1]))
 
@@ -158,8 +158,7 @@ def orthogonality(factors):
 
 
 def performance_as_a_function_of_noise(dataset_parameters, params_emd, params_mse, date, coefficients, noise_type, N_iter = 5, seeds = None, device='cpu'):
-    
-    results = torch.zeros([3,N_iter,len(coefficients),3])
+
     if seeds is not None:
         assert seeds.size(0)==N_iter
     else:
@@ -171,6 +170,17 @@ def performance_as_a_function_of_noise(dataset_parameters, params_emd, params_ms
     if os.path.isfile(file_name):
         results, coefficients = torch.load(file_name, map_location='cpu')
     else:
+        if noise_type == 'jitter':
+            noise_init = dataset_parameters.temporal_jitter
+        elif noise_type == 'additive':
+            noise_init = dataset_parameters.additive_noise
+        elif noise_type == 'dropout':
+            noise_init = dataset_parameters.dropout_proba
+        else:
+            print('Not recognized noise type')
+            return None
+        
+        results = torch.zeros([3,N_iter,len(coefficients),3])
         pbar = tqdm(total=int(results.numel()/9))
         for ind_f, coef in enumerate(coefficients):
             if noise_type == 'jitter':
@@ -179,9 +189,7 @@ def performance_as_a_function_of_noise(dataset_parameters, params_emd, params_ms
                 dataset_parameters.additive_noise = coef
             elif noise_type == 'dropout':
                 dataset_parameters.dropout_proba = coef
-            else:
-                print('Not recognized noise type')
-                break
+                
             for i in range(N_iter):
                 dataset_parameters.seed = seeds[i]
                 sm, trainset_input, trainset_output, testset_input, testset_output = generate_dataset(dataset_parameters,verbose = False, device=device)
@@ -190,6 +198,13 @@ def performance_as_a_function_of_noise(dataset_parameters, params_emd, params_ms
                 results[2,i,ind_f,0], results[2,i,ind_f,1], results[2,i,ind_f,2], _, _, _, _, _ = train_and_plot(sm, trainset_input, testset_input, testset_output, [params_emd, params_mse], date, iteration = i, device=device)
                 
                 pbar.update(1)
+                
+        if noise_type == 'jitter':
+            dataset_parameters.temporal_jitter = noise_init
+        elif noise_type == 'additive':
+            dataset_parameters.additive_noise = noise_init
+        elif noise_type == 'dropout':
+            dataset_parameters.dropout_proba = noise_init
 
         pbar.close()
         torch.save([results, coefficients], file_name)

@@ -7,3 +7,6 @@ dist/
 wassa.egg-info/
 wassa/__pycache__/
 2023-09-15_dimensionality_reduction/.ipynb_checkpoints/
+2025-01-14_results_synthetic_data/2024-12-19_hp_testing_combined_kernels_ortho_and_sparsity.ipynb
+2025-01-14_results_synthetic_data/2024-12-19_robustness_without_bias.ipynb
+
