@@ -12,10 +12,6 @@ def gaussian_kernel(n_steps, mu, std):
     x = torch.arange(n_steps)
     return torch.exp(-(x-mu)**2/(2*std**2))/(std*torch.sqrt(torch.Tensor([2*torch.pi])))
 
-def gets_neurons_order(SMs):
-    
-    ordered_sm = SMs[i_SM,SMs[i_SM].argmax(dim=1).argsort(),:]
-
 def smoothing(x,smoothing_window_size):
     device = x.device
     N_batch, N_kernel, N_timesteps = x.shape
@@ -61,7 +57,7 @@ def learn_offline(criterion, model, input_raster_plot, training_parameters, path
     else:
         LOSS = []
         model = model.to(device)
-        optimizer = torch.optim.Adam(model.parameters(), lr=training_parameters.learning_rate)
+        optimizer = torch.optim.Adam(model.parameters(), lr=training_parameters.learning_rate, betas=(0.9, 0.999))
 
         if training_parameters.batch_size:
             nb_batch = torch.div(input_raster_plot.shape[0],training_parameters.batch_size,rounding_mode='floor')
