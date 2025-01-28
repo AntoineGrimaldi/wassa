@@ -4,6 +4,7 @@ from wassa.wassa_metrics import WassDist, torch_cdf_loss, correlation_latent_var
 from wassa.wassa_plots import plot_results
 from wassa.dataset_generation import generate_dataset
 from tqdm import tqdm
+from seqnmf import seqnmf
 
 def write_path(dir, date, world_params, training_params, iteration=0):
     return f'{dir}{date}_{world_params.get_parameters()}_{training_params.get_parameters()}_{iteration}'
@@ -153,14 +154,15 @@ def orthogonality(factors):
     return (correlation_matrix.triu().sum()-torch.trace(correlation_matrix))/(N_batch*N_kernel*N_timesteps)
 
 
-def performance_as_a_function_of_noise(dataset_parameters, params_emd, params_mse, date, coefficients, noise_type, N_iter = 5, seeds = None, device='cpu'):
-
+def performance_as_a_function_of_noise(dataset_parameters, params_emd, params_mse, date, coefficients, noise_type, N_iter = 5, seeds = None, do_seqnmf = False, device='cpu'):
+    
     if seeds is not None:
         assert seeds.size(0)==N_iter
     else:
         seeds = torch.randint(1000,[N_iter])
 
     file_name = f'../results/{date}_performance_as_a_function_of_{noise_type}_{dataset_parameters().get_parameters()}_{params_emd.get_parameters()}_{coefficients[0]}_{coefficients[-1]}'
+    if do_seqnmf: file_name+='_seqnmf'
     print(file_name)
     
     if os.path.isfile(file_name):
@@ -177,7 +179,8 @@ def performance_as_a_function_of_noise(dataset_parameters, params_emd, params_ms
             return None
         
         results = torch.zeros([3,N_iter,len(coefficients),3])
-        pbar = tqdm(total=int(results.numel()/9))
+        if do_seqnmf: results = torch.zeros([4,N_iter,len(coefficients),3])
+        pbar = tqdm(total=int(results.numel()/(results.shape[0]*results.shape[-1])))
         for ind_f, coef in enumerate(coefficients):
             if noise_type == 'jitter':
                 dataset_parameters.temporal_jitter = coef
@@ -192,6 +195,19 @@ def performance_as_a_function_of_noise(dataset_parameters, params_emd, params_ms
                 results[0,i,ind_f,0], results[0,i,ind_f,1], results[0,i,ind_f,2], _, _, _, _, _ = train_and_plot(sm, trainset_input, testset_input, testset_output, [params_mse], date, iteration = i, device=device)
                 results[1,i,ind_f,0], results[1,i,ind_f,1], results[1,i,ind_f,2], _, _, _, _, _ = train_and_plot(sm, trainset_input, testset_input, testset_output, [params_emd], date, iteration = i, device=device)
                 results[2,i,ind_f,0], results[2,i,ind_f,1], results[2,i,ind_f,2], _, _, _, _, _ = train_and_plot(sm, trainset_input, testset_input, testset_output, [params_emd, params_mse], date, iteration = i, device=device)
+                if do_seqnmf:
+                    lambda_ = 0
+                    path_seqnmf_ = f'../results/{date}_seqnmf_{dataset_parameters().get_parameters()}_{lambda_}'
+                    if os.path.isfile(path_seqnmf_):
+                        W, H, cost, loadings, power = torch.load(path_seqnmf_)
+                    else:
+                        seqnmf_input = torch.cat([trainset_input[i] for i in range(trainset_input.shape[0])],dim=-1).to('cpu')
+                        W, H, cost, loadings, power = seqnmf(seqnmf_input, K=dataset_parameters.N_SMs, L=dataset_parameters.N_delays, Lambda=lambda_, max_iter=1000)
+                        torch.save([W, H, cost, loadings, power],path_seqnmf_)
+    
+                    learnt_kernels = WassA(sm.SMs.shape,weight_init=torch.tensor(W.swapaxes(0,1),dtype=torch.float32),device=device)
+                    if np.isnan(W).sum()==0:
+                        results[4,i,ind_f,0], results[4,i,ind_f,1], results[4,i,ind_f,2], _, _, _, _, _ = get_similarity(sm,learnt_kernels,testset_input,device=device)
                 
                 pbar.update(1)
                 
@@ -206,23 +222,26 @@ def performance_as_a_function_of_noise(dataset_parameters, params_emd, params_ms
         torch.save([results, coefficients], file_name)
     return results, coefficients
 
-def performance_as_a_function_of_number_of_motifs(dataset_parameters, params_emd, params_mse, date, num_patterns, N_iter = 5, seeds = None, device='cpu'):
+def performance_as_a_function_of_number_of_motifs(dataset_parameters, params_emd, params_mse, date, num_patterns, N_iter = 5, seeds = None, do_seqnmf = False, device='cpu'):
     
-    freq_init = dataset_parameters.freq_sms[0]
-    
-    results = torch.zeros([3,N_iter,len(num_patterns),3])
     if seeds is not None:
         assert seeds.size(0)==N_iter
     else:
         seeds = torch.randint(1000,[N_iter])
     
     file_name = f'../results/{date}_performance_as_a_function_of_number_of_motifs_{dataset_parameters().get_parameters()}_{params_emd.get_parameters()}_{num_patterns[0]}_{num_patterns[-1]}'
+    if do_seqnmf: file_name+='_seqnmf'
     print(file_name)
     
     if os.path.isfile(file_name):
         results, num_patterns = torch.load(file_name, map_location='cpu')
     else:
-        pbar = tqdm(total=int(results.numel()/9))
+        freq_init = dataset_parameters.freq_sms[0]
+    
+        results = torch.zeros([3,N_iter,len(num_patterns),3])
+        if do_seqnmf: results = torch.zeros([4,N_iter,len(num_patterns),3])
+    
+        pbar = tqdm(total=int(results.numel()/(results.shape[0]*results.shape[-1])))
         for i in range(N_iter):
             dataset_parameters.seed = seeds[i]
             for ind_f, n_mot in enumerate(num_patterns):
@@ -235,6 +254,20 @@ def performance_as_a_function_of_number_of_motifs(dataset_parameters, params_emd
                 results[0,i,ind_f,0], results[0,i,ind_f,1], results[0,i,ind_f,2], _, _, _, _, _ = train_and_plot(sm, trainset_input, testset_input, testset_output, [params_mse], date, iteration = i, device=device)
                 results[1,i,ind_f,0], results[1,i,ind_f,1], results[1,i,ind_f,2], _, _, _, _, _ = train_and_plot(sm, trainset_input, testset_input, testset_output, [params_emd], date, iteration = i, device=device)
                 results[2,i,ind_f,0], results[2,i,ind_f,1], results[2,i,ind_f,2], _, _, _, _, _ = train_and_plot(sm, trainset_input, testset_input, testset_output, [params_emd, params_mse], date, iteration = i, device=device)
+                if do_seqnmf:
+                    lambda_ = .001
+                    path_seqnmf_ = f'../results/{date}_seqnmf_{dataset_parameters().get_parameters()}_{lambda_}'
+                    if os.path.isfile(path_seqnmf_):
+                        W, H, cost, loadings, power = torch.load(path_seqnmf_)
+                    else:
+                        seqnmf_input = torch.cat([trainset_input[i] for i in range(trainset_input.shape[0])],dim=-1).to('cpu')
+                        W, H, cost, loadings, power = seqnmf(seqnmf_input, K=dataset_parameters.N_SMs, L=dataset_parameters.N_delays, Lambda=lambda_, max_iter=1000)
+                        torch.save([W, H, cost, loadings, power],path_seqnmf_)
+    
+                    learnt_kernels = WassA(sm.SMs.shape,weight_init=torch.tensor(W.swapaxes(0,1),dtype=torch.float32),device=device)
+                    if np.isnan(W).sum()==0:
+                        results[4,i,ind_f,0], results[4,i,ind_f,1], results[4,i,ind_f,2], _, _, _, _, _ = get_similarity(sm,learnt_kernels,testset_input,device=device)
+                
                 pbar.update(1)
 
         pbar.close()
