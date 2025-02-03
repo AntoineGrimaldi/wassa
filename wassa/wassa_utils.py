@@ -1,10 +1,11 @@
 import torch, os, time
 from wassa.wassa import WassA
-from wassa.wassa_metrics import WassDist, torch_cdf_loss, correlation_latent_variables, correlation_kernels, kernels_diff
+from wassa.wassa_metrics import WassDist, torch_cdf_loss, correlation_latent_variables, correlation_kernels, kernels_diff, get_similarity
 from wassa.wassa_plots import plot_results
 from wassa.dataset_generation import generate_dataset
 from tqdm import tqdm
 from seqnmf import seqnmf
+import numpy as np
 
 def write_path(dir, date, world_params, training_params, iteration=0):
     return f'{dir}{date}_{world_params.get_parameters()}_{training_params.get_parameters()}_{iteration}'
@@ -78,11 +79,11 @@ def learn_offline(criterion, model, input_raster_plot, training_parameters, path
                 else:
                     X = input_raster_plot
                 
-                X.div_(X.sum(dim=-1, keepdim=True)+1e-14)
+                X.div_(X.sum(dim=-1, keepdim=True))
                 optimizer.zero_grad()
                 
                 factors, reconstruction = model(X)
-                reconstruction = reconstruction.div(reconstruction.sum(dim=-1, keepdim=True)+1e-14)
+                reconstruction = reconstruction.div(reconstruction.sum(dim=-1, keepdim=True))
                 loss = criterion(reconstruction, X)
 
                 if training_parameters.lambda_ != 0:
@@ -104,7 +105,7 @@ def learn_offline(criterion, model, input_raster_plot, training_parameters, path
 
                 with torch.no_grad():
                     model.decoding_weights.data.clamp_(min=0)
-                    model.decoding_weights.data.div_((torch.linalg.norm(model.decoding_weights.data, ord=2, dim=(1,2), keepdim=True)+1e-14).repeat(1,model.decoding_weights.shape[1],model.decoding_weights.shape[2]))
+                    model.decoding_weights.data.div_((torch.linalg.norm(model.decoding_weights.data, ord=2, dim=(1,2), keepdim=True)).repeat(1,model.decoding_weights.shape[1],model.decoding_weights.shape[2]))
         
         torch.save(model.state_dict(), path + '.pth')
         torch.save(LOSS, path + '_loss.pth')
@@ -116,7 +117,7 @@ def cross_correlation_comp(factors, mode = 'mean'):
     device = factors.device
     
     N_batch, N_kernel, N_timesteps = factors.shape
-    normalized_factors = factors.clone().div_(torch.norm(factors, p=2, dim=-1, keepdim=True)+1e-14)
+    normalized_factors = factors.clone().div_(torch.norm(factors, p=2, dim=-1, keepdim=True))
     reshaped_factors = normalized_factors.reshape(N_batch*N_kernel,1,N_timesteps)
     padded_factors = torch.nn.functional.pad(reshaped_factors, (torch.div(N_timesteps,2,rounding_mode='floor'),torch.div(N_timesteps,2,rounding_mode='floor'),0,0,0,0), mode='constant')
     
@@ -147,7 +148,7 @@ def kernels_orthogonality(weights):
 def orthogonality(factors):
     device = factors.device
     N_batch, N_kernel, N_timesteps = factors.shape
-    normalized_factors = factors.clone().div_(torch.norm(factors, p=1, dim=-1, keepdim=True)+1e-14)
+    normalized_factors = factors.clone().div_(torch.norm(factors, p=1, dim=-1, keepdim=True))
     correlation_matrix = torch.zeros([N_kernel,N_kernel], device=device)
     for b in range(N_batch):
         correlation_matrix += torch.corrcoef(normalized_factors[b])
@@ -205,9 +206,9 @@ def performance_as_a_function_of_noise(dataset_parameters, params_emd, params_ms
                         W, H, cost, loadings, power = seqnmf(seqnmf_input, K=dataset_parameters.N_SMs, L=dataset_parameters.N_delays, Lambda=lambda_, max_iter=1000)
                         torch.save([W, H, cost, loadings, power],path_seqnmf_)
     
-                    learnt_kernels = WassA(sm.SMs.shape,weight_init=torch.tensor(W.swapaxes(0,1),dtype=torch.float32),device=device)
                     if np.isnan(W).sum()==0:
-                        results[4,i,ind_f,0], results[4,i,ind_f,1], results[4,i,ind_f,2], _, _, _, _, _ = get_similarity(sm,learnt_kernels,testset_input,device=device)
+                        learnt_kernels = WassA(sm.SMs.shape,weight_init=torch.tensor(W.swapaxes(0,1),dtype=torch.float32),device=device)
+                        results[3,i,ind_f,0], results[3,i,ind_f,1], results[3,i,ind_f,2], _, _, _ = get_similarity(sm,learnt_kernels,testset_input,device=device)
                 
                 pbar.update(1)
                 
@@ -264,9 +265,9 @@ def performance_as_a_function_of_number_of_motifs(dataset_parameters, params_emd
                         W, H, cost, loadings, power = seqnmf(seqnmf_input, K=dataset_parameters.N_SMs, L=dataset_parameters.N_delays, Lambda=lambda_, max_iter=1000)
                         torch.save([W, H, cost, loadings, power],path_seqnmf_)
     
-                    learnt_kernels = WassA(sm.SMs.shape,weight_init=torch.tensor(W.swapaxes(0,1),dtype=torch.float32),device=device)
                     if np.isnan(W).sum()==0:
-                        results[4,i,ind_f,0], results[4,i,ind_f,1], results[4,i,ind_f,2], _, _, _, _, _ = get_similarity(sm,learnt_kernels,testset_input,device=device)
+                        learnt_kernels = WassA(sm.SMs.shape,weight_init=torch.tensor(W.swapaxes(0,1),dtype=torch.float32),device=device)
+                        results[3,i,ind_f,0], results[3,i,ind_f,1], results[3,i,ind_f,2], _, _, _ = get_similarity(sm,learnt_kernels,testset_input,device=device)
                 
                 pbar.update(1)
 

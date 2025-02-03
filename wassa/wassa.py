@@ -13,12 +13,15 @@ class WassA(torch.nn.Module):
                 weights = torch.ones(kernel_size)
             else:
                 assert list(kernel_size) == list(weight_init.size()), print(f'weights size is {weight_init.size()} when {kernel_size} is expected')
-                weights = weight_init.detach().clone()
+                weights = weight_init.detach().cpu().clone()
+                sum_weights = torch.linalg.norm(weights, ord=2, dim=(1,2))
+                weights[sum_weights==0] = torch.ones([kernel_size[1],kernel_size[2]])
         else:
             weights = torch.rand(kernel_size)
-        weights.div_(torch.norm(weights,p=2, dim=(1,2), keepdim=True))
+
+        weights.div_(torch.linalg.norm(weights, ord=2, dim=(1,2), keepdim=True)).repeat(1,weights.shape[1],weights.shape[2])
         self.decoding_weights = torch.nn.Parameter(weights.to(device), requires_grad=True)
-        
+
         if do_bias:
             flat_k = torch.ones_like(weights[0]).unsqueeze(0)
             flat_k.div_(torch.norm(flat_k,p=2, dim=(1,2), keepdim=True))

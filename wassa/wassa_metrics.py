@@ -66,7 +66,7 @@ def correlation_latent_variables(true, learnt):
     var_learnt = ((shaped_learnt-mean_learnt)**2).mean(axis=-1)
     covar = ((shaped_learnt-mean_learnt)*(shaped_true-mean_true)).mean(axis=-1)
 
-    corrcoef = covar/torch.sqrt(var_true*var_learnt+1e-14)
+    corrcoef = covar/(torch.sqrt(var_true*var_learnt)+1e-14)
     max_correlation = find_closest(corrcoef,'max')
 
     return max_correlation/n_kernels
@@ -122,7 +122,7 @@ def get_similarity(sm, autoencoder, testset_input, device='cpu'):
     true_factors, _ = generative_model_ae(testset_input)
     learnt_factors, _ = autoencoder(testset_input)
     learnt_weights = autoencoder.decoding_weights.detach().clone()
-
+    
     similarity_factors = correlation_latent_variables(true_factors.detach(), learnt_factors.detach())
     similarity_kernels = correlation_kernels(sm.SMs, learnt_weights)
     mse = kernels_diff(sm.SMs, learnt_weights, 'mse')
