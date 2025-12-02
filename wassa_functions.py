@@ -1,9 +1,9 @@
 import torch, os
-from dataset_generation import generate_dataset, get_dataset_parameters
-from wassa_metrics import get_similarity
-from wassa_training import unsupervised_learning, get_training_parameters
-from wassa_utils import in_notebook
-#from seqnmf import seqnmf
+from dataset_generation import generate_dataset, get_dataset_parameters, make_allen_dataset
+from wassa_metrics import get_similarity, WassDist, kernels_diff
+from wassa_training import learn_motifs, unsupervised_learning, get_training_parameters
+from wassa_utils import in_notebook, correlation_kernels
+from wassa import WassA
 if in_notebook():
     from tqdm.notebook import tqdm
 else:
@@ -130,3 +130,45 @@ def performance_as_a_function_of_dataset_parameters(file_name, dataset_parameter
         
     pbar.close()
     return results, hp_grid
+
+def allen_reconstruction_comparison(dataset_name, training_parameters, metric_names, frs=False, saving_path = 'results/allen_',device='cpu'):
+
+    mse_loss = torch.nn.MSELoss()
+    emd_loss = WassDist(zeros='same',normalize=training_parameters['normalize_input'])
+
+    dataset_path = '../../'+dataset_name+'/*'
+    all_trainsets, all_testsets, all_othersets = make_allen_dataset(dataset_path)
+    results = torch.zeros([len(all_trainsets),7,3])
+    
+    for ind in tqdm(range(len(all_trainsets))):
+
+        if frs:
+            training_set, testing_set, othersets = all_trainsets[ind].mean(dim=-1).unsqueeze(-1).to(device), all_testsets[ind].mean(dim=-1).unsqueeze(-1).to(device), all_othersets[ind].mean(dim=-1).unsqueeze(-1).to(device)
+        else:
+            training_set, testing_set, othersets = all_trainsets[ind].to(device), all_testsets[ind].to(device), all_othersets[ind].to(device)
+
+        num_samples, num_neurons, num_timesteps = training_set.shape
+        training_parameters['kernel_size'] = (1,num_neurons, num_timesteps)
+        model = WassA(training_parameters,device=device)
+        model_name = saving_path+dataset_name+str(ind)+get_training_parameters(training_parameters)
+        model, training_metrics, _ = learn_motifs(model,training_set,testing_set,training_parameters,model_name,metric_names,None,verbose=False)
+        datasets = [training_set,testing_set,othersets]
+        for ind_set, dataset in enumerate(datasets):
+            if training_parameters['normalize_input']:
+                dataset = torch.nn.functional.normalize(dataset, p=1, dim=2)
+            factors, dataset_hat = model(dataset)
+            results[ind,0,ind_set] = mse_loss(dataset_hat,dataset).detach()
+            results[ind,1,ind_set] = emd_loss(dataset_hat,dataset).detach()
+            results[ind,2,ind_set] = (1-torch.var(dataset-dataset_hat)/torch.var(dataset)).nanmean().detach()
+            correlation_kernel, mse_kernel, emd_kernel = 0, 0, 0
+            for i in range(dataset.shape[0]):
+                input_spikes, weights = dataset[i].unsqueeze(0).detach(), model.weights.detach()
+                correlation_kernel += correlation_kernels(input_spikes, weights)
+                mse_kernel += kernels_diff(input_spikes, weights, 'mse')
+                emd_kernel += kernels_diff(input_spikes, weights, 'emd')
+            results[ind,3,ind_set] = correlation_kernel/dataset.shape[0]
+            results[ind,4,ind_set] = mse_kernel/dataset.shape[0]
+            results[ind,5,ind_set] = emd_kernel/othersets.shape[0]
+            results[ind,6,ind_set] = factors.detach().mean()
+
+    return results

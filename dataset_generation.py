@@ -1,4 +1,4 @@
-import torch, os
+import torch, os, glob
 
 def get_dataset_parameters(dataset_parameters,include_samples=False):
 
@@ -56,7 +56,8 @@ class sm_generative_model:
         random_jitter = torch.normal(0, self.opt['temporal_jitter'], size=(nb_trials, self.opt['N_sms'], self.opt['N_pre']))
         random_selection = torch.bernoulli(torch.ones_like(random_jitter)*(1-self.opt['dropout_proba']))
         random_warping = (1 - self.opt['min_warping_coef'])*torch.rand(nb_trials,self.opt['N_sms']) + self.opt['min_warping_coef']
-        random_kernel = torch.bernoulli(self.opt['proba_sms'].unsqueeze(0).repeat(nb_trials,1))
+        random_kernel = torch.distributions.Categorical(self.opt['proba_sms'].unsqueeze(0).repeat(nb_trials,1)).sample()
+        #random_kernel = torch.bernoulli(self.opt['proba_sms'].unsqueeze(0).repeat(nb_trials,1))
         
         for trial in range(nb_trials):
             for kernel in range(len(self.spike_times)):
@@ -124,5 +125,29 @@ def kfold_dataset(dataset_input, k=3, shuffle_indices=False, existing_indices=No
         trainsets_input = testsets_input
         print('with k=1, train and test sets are the same')
     return trainsets_input, testsets_input, shuffled_indices
+
+def make_allen_dataset(dataset_path, number_samples_per_image=10, number_folds=5, device='cpu'):
+    
+    files_list = glob.glob(dataset_path)
+    all_trainsets, all_testsets, all_othersets = [], [], []
+    for f in range(len(files_list)):
+        data = torch.load(files_list[f], weights_only = True)
+        data = data.to(torch.float32).to(device)
+        number_samples, number_neurons, number_timesteps = data.shape
+        number_images = number_samples//number_samples_per_image
+        for image in range(number_images):
+            trainsets, testsets, indices = kfold_dataset(data[image*number_samples_per_image:(image+1)*number_samples_per_image],k=number_folds)
+            other_testsets = []
+            for i in range(len(testsets)):
+                image_numbers = torch.randint(number_images,(testsets[0].shape[0],))
+                while image in image_numbers:
+                    image_numbers = torch.randint(number_images,(testsets[0].shape[0],))
+                sample_numbers = torch.randint(number_samples_per_image,(testsets[0].shape[0],))
+                other_testsets.append(data[image_numbers*number_samples_per_image+sample_numbers])
+            all_trainsets += trainsets
+            all_testsets += testsets
+            all_othersets += other_testsets
+            
+    return all_trainsets, all_testsets, all_othersets
 
     

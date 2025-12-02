@@ -277,3 +277,24 @@ def plot_results_std(ax, results, coefs, metric_names, xlabel, metric, legend, c
     if do_legend: 
         ax.legend(fontsize=12);
     return ax
+
+def make_violin(ax,results,color,separation_coef=.5,offset=1):
+    
+    if len(results.shape)==2:
+        violin_parts = ax.violinplot(results,positions=[offset+i*separation_coef for i in range(results.shape[1])],showmedians=True)
+    elif len(results.shape)==1:
+        violin_parts = ax.violinplot(results,positions=[offset],showmedians=True)
+    else:
+        print(f'shape of the results is {results.shape}')
+
+    # Make all the violin statistics marks red:
+    for partname in ('cbars','cmins','cmaxes','cmedians', 'bodies'):
+        vp = violin_parts[partname]
+        if partname=='bodies':
+            for k in range(len(vp)):
+                vp[k].set_alpha(.3)
+                vp[k].set_facecolor(color)
+        else:
+            vp.set_edgecolor(color)
+            vp.set_linewidth(1)
+    return ax
