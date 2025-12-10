@@ -282,6 +282,7 @@ def make_violin(ax,results,color,separation_coef=.5,offset=1):
     
     if len(results.shape)==2:
         violin_parts = ax.violinplot(results,positions=[offset+i*separation_coef for i in range(results.shape[1])],showmedians=True)
+        
     elif len(results.shape)==1:
         violin_parts = ax.violinplot(results,positions=[offset],showmedians=True)
     else:
