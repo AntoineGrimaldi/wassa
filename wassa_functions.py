@@ -164,8 +164,8 @@ def allen_reconstruction_comparison(dataset_name, training_parameters, metric_na
             for i in range(dataset.shape[0]):
                 input_spikes, weights = dataset[i].unsqueeze(0).detach(), model.weights.detach()
                 correlation_kernel += correlation_kernels(input_spikes, weights)
-                mse_kernel += kernels_diff(input_spikes, weights, 'mse')
-                emd_kernel += kernels_diff(input_spikes, weights, 'emd')
+                mse_kernel += kernels_diff(input_spikes, weights, 'mse', norm = 1)
+                emd_kernel += kernels_diff(input_spikes, weights, 'emd', norm = 1)
             results[ind,3,ind_set] = correlation_kernel/dataset.shape[0]
             results[ind,4,ind_set] = mse_kernel/dataset.shape[0]
             results[ind,5,ind_set] = emd_kernel/othersets.shape[0]

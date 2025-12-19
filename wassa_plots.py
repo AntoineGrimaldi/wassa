@@ -218,8 +218,9 @@ def plot_results_std(ax, results, coefs, metric_names, xlabel, metric, legend, c
     mean_, std_ = results.mean(axis=(1,2)), results.std(axis=(1,2))
     
     if quantile:
-        q5 = np.quantile(results,.01,axis=(1,2))
-        q95 = np.quantile(results,.99,axis=(1,2))
+        q5 = np.quantile(results,.05,axis=(1,2))
+        q95 = np.quantile(results,.95,axis=(1,2))
+        mean_ = np.median(results,axis=(1,2))
 
     if quantile:
         bottom_ = q5
@@ -240,7 +241,7 @@ def plot_results_std(ax, results, coefs, metric_names, xlabel, metric, legend, c
     elif log_x:
         ax.semilogx(coefs, mean_, 'P',color=color, markeredgecolor='white', markersize=10, label=legend)
     elif log_y:
-        if (mean_==0).sum()>0: print(f'zero values are set as {min_log_val}') 
+        if (mean_==0).sum()>0: print(f'zero values are set as {min_log_val}')
         mean_[mean_==0] = min_log_val
         ax.plot(coefs, np.log10(mean_), 'P',color=color, markeredgecolor='white', markersize=10, label=legend)
     else:

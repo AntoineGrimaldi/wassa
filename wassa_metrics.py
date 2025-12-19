@@ -35,19 +35,24 @@ class WassDist(torch.nn.Module):
     def forward(self, input_seq, target):
         return torch_cdf_loss(target,input_seq,self.zeros,self.normalize).nanmean()
 
-def kernels_diff(true_kernels, learnt_kernels, metric):
+def kernels_diff(true_kernels, learnt_kernels, metric, norm = None):
 
     true_kernels, learnt_kernels = true_kernels.clone(), learnt_kernels.clone()
     n_motifs, n_neurons, n_timbin = true_kernels.shape
     n_kernels = learnt_kernels.shape[0]
+
+    if norm == 1:
+        true_kernels = torch.nn.functional.normalize(true_kernels, p=1, dim=2)
+        learnt_kernels = torch.nn.functional.normalize(learnt_kernels, p=1, dim=2)
+    if norm == 2:
+        true_kernels = torch.nn.functional.normalize(true_kernels, p=2, dim=(1,2))
+        learnt_kernels = torch.nn.functional.normalize(learnt_kernels, p=2, dim=(1,2))
 
     if metric == 'mse':
         true_matrix = true_kernels.flatten(start_dim=1).unsqueeze(0).repeat(n_kernels,1,1)
         learnt_matrix = learnt_kernels.flatten(start_dim=1).unsqueeze(1).repeat(1,n_motifs,1)
         error_matrix = ((true_matrix-learnt_matrix)**2).mean(axis=-1)
     elif metric == 'emd':
-        true_kernels.div_(torch.norm(true_kernels, p=1, dim=(2), keepdim=True)+1e-14)
-        learnt_kernels.div_(torch.norm(learnt_kernels, p=1, dim=(2), keepdim=True)+1e-14)
         true_matrix = true_kernels.unsqueeze(0).repeat(n_kernels,1,1,1)
         learnt_matrix = learnt_kernels.unsqueeze(1).repeat(1,n_motifs,1,1)
         error_matrix = torch_cdf_loss(true_matrix,learnt_matrix,'same',False).mean(axis=-1)

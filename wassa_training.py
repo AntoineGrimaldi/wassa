@@ -81,6 +81,9 @@ def penalty(model,factors,training_parameters):
     if 'factors_cc' in training_parameters['penalty_type']:
         lambda_ = training_parameters['lambda'][training_parameters['penalty_type'].index('factors_cc')]
         penalty += lambda_*factors_similarity(factors)
+    if 'factors_orthogonality' in training_parameters['penalty_type']:
+        lambda_ = training_parameters['lambda'][training_parameters['penalty_type'].index('kernels_orthogonality')]
+        penalty += lambda_*kernels_similarity(model.weights)
     if 'kernels_orthogonality' in training_parameters['penalty_type']:
         lambda_ = training_parameters['lambda'][training_parameters['penalty_type'].index('kernels_orthogonality')]
         penalty += lambda_*kernels_similarity(model.weights)

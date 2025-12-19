@@ -131,7 +131,7 @@ def compute_seqnmf(sm, dataset, training_parameters, metric_names, synthetic_met
 def gaussian_kernel(x, amplitude, mean, std):
     return amplitude * np.exp(-((x - mean) / 4 / std)**2)
 
-def estimate_spike_times(all_weights, dataset_parameters = None, max_iteration = 5000, min_max_proba = 1e-5):
+def estimate_spike_times(all_weights, max_iteration = 5000, min_max_proba = 1e-5):
 
     n_sms, n_neurons, n_timesteps = all_weights.shape
     all_weights = all_weights / (all_weights.sum(axis=-1,keepdims=True)+1e-14).repeat(n_timesteps, axis=-1)
@@ -142,10 +142,6 @@ def estimate_spike_times(all_weights, dataset_parameters = None, max_iteration =
         spike_times = []
         errors = []
         for neuron in range(n_neurons):
-            if dataset_parameters is not None:
-                jitter = dataset_parameters['temporal_jitter']
-            else:
-                jitter = .01
             max_proba = all_weights[sm,neuron].max()
             time = np.where(all_weights[sm,neuron]==max_proba)[0][0]
             jitter = 1/(max_proba*np.sqrt(2*np.pi))
