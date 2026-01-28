@@ -35,7 +35,7 @@ class WassA(torch.nn.Module):
             self.normalization()
 
     def forward(self, x):
-        
+
         if self.tied_weights:
             z = torch.nn.functional.conv1d(x, self.weights)
         else:
