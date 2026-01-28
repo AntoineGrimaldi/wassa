@@ -130,6 +130,7 @@ def make_allen_dataset(dataset_path, number_samples_per_image=10, number_folds=5
     
     files_list = glob.glob(dataset_path)
     all_trainsets, all_testsets, all_othersets = [], [], []
+    ids = torch.arange(20).repeat_interleave(10)
     for f in range(len(files_list)):
         data = torch.load(files_list[f], weights_only = True)
         data = data.to(torch.float32).to(device)
