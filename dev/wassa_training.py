@@ -1,4 +1,5 @@
 import torch, os, time
+import numpy as np
 from dataset_generation import kfold_dataset
 from wassa import WassA
 from wassa_metrics import WassDist, get_similarity
@@ -54,7 +55,14 @@ def learn_motifs(model,training_set,testing_set,training_parameters,path,metric_
                     X = torch.nn.functional.normalize(X, p=1, dim=2)
                     
                 optimizer.zero_grad()
-                factors_train, reconstruction = model(X)
+                factors_train, reconstruction, indices_time = model(X)
+                
+                if training_parameters['topk'] is not None:
+                    indices = torch.flatten(indices_time,start_dim=1).to('cpu')
+                    all_indices = torch.flatten(torch.from_numpy(np.linspace(indices,indices+training_parameters['kernel_size'][2]*torch.ones_like(indices),num=training_parameters['kernel_size'][2]+1,axis=2)).to(torch.int64),start_dim=1).unsqueeze(1).repeat(1,training_parameters['kernel_size'][1],1)
+                    reconstruction = torch.gather(reconstruction,2,all_indices.to(reconstruction.device)).reshape([indices.shape[0]*indices.shape[1],training_parameters['kernel_size'][1],training_parameters['kernel_size'][2]+1])
+                    X = torch.gather(X,2,all_indices.to(X.device)).reshape([indices.shape[0]*indices.shape[1],training_parameters['kernel_size'][1],training_parameters['kernel_size'][2]+1])
+                    
                 loss = criterion(reconstruction,X)
                 penalty_value = penalty(model,factors_train,training_parameters)
                 loss += penalty_value
@@ -95,6 +103,9 @@ def penalty(model,factors,training_parameters):
     if 'cc' in training_parameters['penalty_type']:
         lambda_ = training_parameters['lambda'][training_parameters['penalty_type'].index('cc')]
         penalty += lambda_*cross_correlation_comp(factors)
+    if 'max_cc' in training_parameters['penalty_type']:
+        lambda_ = training_parameters['lambda'][training_parameters['penalty_type'].index('max_cc')]
+        penalty += lambda_*cross_correlation_comp(factors,mode='max')
     if 'smoothed_orthogonality' in training_parameters['penalty_type'] and training_parameters['smoothwind']>0:
         lambda_ = training_parameters['lambda'][training_parameters['penalty_type'].index('smoothed_orthogonality')]
         smoothed_factors = smoothing(factors,training_parameters['smoothwind'])
@@ -124,7 +135,7 @@ def compute_training_metrics(metric_names, model, criterion, testing_set, loss, 
     training_metrics = torch.zeros([len(metric_names)])
     training_metrics[:] = torch.nan
     if len(set(metric_names).intersection(['testing loss','explained variance','train/test factors difference']))>0:
-        factors_test, testset_hat = model(testing_set)
+        factors_test, testset_hat, _ = model(testing_set)
     for ind_m, metric in enumerate(metric_names):
         if metric == 'training loss':
             training_metrics[ind_m] = (loss-penalty_value).detach()

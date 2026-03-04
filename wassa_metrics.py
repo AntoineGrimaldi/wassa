@@ -11,28 +11,30 @@ def torch_cdf_loss(reconstructed,input_seq,zeros,normalize):
         zeros : treat neurons with no spike as informative ('same') or not ('ignore') -> nan
     '''
     assert reconstructed.shape == input_seq.shape
-
+    
     n_timesteps = reconstructed.shape[-1]
     if normalize:
         reconstructed = torch.nn.functional.normalize(reconstructed, p=1, dim=2)
         input_seq = torch.nn.functional.normalize(input_seq, p=1, dim=2)
         if zeros == 'same':
             reconstructed[reconstructed.sum(dim=-1)==0], input_seq[input_seq.sum(dim=-1)==0] = 1/n_timesteps, 1/n_timesteps
-    elif zeros == 'ignore':
-        reconstructed[reconstructed.sum(dim=-1)==0], input_seq[input_seq.sum(dim=-1)==0] = torch.nan, torch.nan
-    
-    cdf_reconstructed = torch.cumsum(reconstructed,dim=-1)
-    cdf_input = torch.cumsum(input_seq,dim=-1)
-    
+            
+    if zeros == 'ignore':
+        cdf_reconstructed = torch.cumsum(reconstructed[input_seq.sum(dim=-1)>0],dim=-1)
+        cdf_input = torch.cumsum(input_seq[input_seq.sum(dim=-1)>0],dim=-1)
+    else:
+        cdf_reconstructed = torch.cumsum(reconstructed,dim=-1)
+        cdf_input = torch.cumsum(input_seq,dim=-1)
+
     return torch.nanmean(torch.abs(cdf_input-cdf_reconstructed),dim=-1)
 
 class WassDist(torch.nn.Module):
-    def __init__(self,zeros='same',normalize=True):
+    def __init__(self,zeros='ignore',normalize=True):
         super().__init__()
         self.zeros = zeros
         self.normalize = normalize
 
-    def forward(self, input_seq, target):
+    def forward(self, target, input_seq):
         return torch_cdf_loss(target,input_seq,self.zeros,self.normalize).nanmean()
 
 def kernels_diff(true_kernels, learnt_kernels, metric, norm = None):
@@ -55,7 +57,7 @@ def kernels_diff(true_kernels, learnt_kernels, metric, norm = None):
     elif metric == 'emd':
         true_matrix = true_kernels.unsqueeze(0).repeat(n_kernels,1,1,1)
         learnt_matrix = learnt_kernels.unsqueeze(1).repeat(1,n_motifs,1,1)
-        error_matrix = torch_cdf_loss(true_matrix,learnt_matrix,'same',False).mean(axis=-1)
+        error_matrix = torch_cdf_loss(true_matrix,learnt_matrix,'ignore',False).mean(axis=-1)
 
     return find_closest(error_matrix,'min')
 

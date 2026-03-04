@@ -31,7 +31,7 @@ def plot_results(training_metrics, metrics_names, trained_layer_of_neurons, inpu
     if true_weights is not None:
         plot_SM(true_weights, figsize=figsize_kernels, N_show = N_SMs, order_sms = order_sms);
 
-    factors, reconstruction = trained_layer_of_neurons(input_raster_plot)
+    factors, reconstruction, _ = trained_layer_of_neurons(input_raster_plot)
     N_sample, _, _ = input_raster_plot.shape
     random_ind = torch.randint(N_sample,[1])
     if true_occurence is not None:
@@ -41,6 +41,8 @@ def plot_results(training_metrics, metrics_names, trained_layer_of_neurons, inpu
     padded_factors = torch.nn.functional.pad(factors[random_ind], (N_delays//2,N_delays//2, 0, 0), mode='constant')
     for k in range(N_SMs):
         ax_raster.plot((N_pre/padded_factors.max().item())*padded_factors[0,k].detach().cpu().numpy())
+    fig_rec, ax_rec = plt.subplots(figsize = (12.5, 1.61803))
+    ax_rec.imshow(reconstruction[random_ind].squeeze(0).detach().to('cpu').numpy(),aspect='auto')
     plt.show();
 
 #TODO :  remove numpy to have only torch tensors 

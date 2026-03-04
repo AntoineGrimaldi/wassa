@@ -55,6 +55,7 @@ class sm_generative_model:
         random_noise = torch.poisson(nb_spikes_noise.unsqueeze(0).unsqueeze(0).repeat(nb_trials, self.opt['N_pre']))
         random_jitter = torch.normal(0, self.opt['temporal_jitter'], size=(nb_trials, self.opt['N_sms'], self.opt['N_pre']))
         random_selection = torch.bernoulli(torch.ones_like(random_jitter)*(1-self.opt['dropout_proba']))
+        print(random_selection.shape)
         random_warping = (1 - self.opt['min_warping_coef'])*torch.rand(nb_trials,self.opt['N_sms']) + self.opt['min_warping_coef']
         #random_kernel = torch.distributions.Categorical(self.opt['proba_sms'].unsqueeze(0).repeat(nb_trials,1)).sample()
         random_kernel = torch.bernoulli(self.opt['proba_sms'].unsqueeze(0).repeat(nb_trials,1))

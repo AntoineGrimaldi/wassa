@@ -7,7 +7,7 @@ class WassA(torch.nn.Module):
         K, N, D = training_parameters['kernel_size']
         self.tied_weights = training_parameters['tied_weights']
         self.do_bias = training_parameters['do_bias']
-        self.topk = training_parameters['topk']
+        self.top_k = training_parameters['topk']
         self.norm = training_parameters['kernels_norm']
         
         if self.tied_weights:
@@ -41,14 +41,15 @@ class WassA(torch.nn.Module):
         else:
             z = self.encoder(x)
             
-        if self.topk is not None:
-            values, indices_time = z.topk(self.topk)
+        if self.top_k is not None:
+            values, indices_time = z.topk(self.top_k)
             indices_trial = torch.arange(indices_time.shape[0]).unsqueeze(-1).unsqueeze(-1).repeat(1,indices_time.shape[1],indices_time.shape[2])
             indices_neurons = torch.arange(indices_time.shape[1]).unsqueeze(0).unsqueeze(-1).repeat(indices_time.shape[0],1,indices_time.shape[2])
             topz = torch.zeros_like(z)
             topz[indices_trial.flatten(),indices_neurons.flatten(),indices_time.flatten()] = values.flatten()
         else:
             topz = z
+            indices_time = None
             
         if self.tied_weights:    
             x_hat = torch.nn.functional.conv_transpose1d(topz, self.weights)
@@ -57,7 +58,7 @@ class WassA(torch.nn.Module):
 
         if self.do_bias[0]:
             x_hat += self.bias.unsqueeze(0).unsqueeze(2).repeat(x.shape[0],1,x.shape[2])
-        return z, x_hat
+        return topz, x_hat, indices_time
 
     def normalization(self):
         if self.do_bias[0]:

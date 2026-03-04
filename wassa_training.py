@@ -11,7 +11,7 @@ else:
     from tqdm import tqdm
 
 def learn_motifs(model,training_set,testing_set,training_parameters,path,metric_names,world,online_plots=False,verbose=True):
-    
+
     if os.path.isfile(path + '.pth'):
         if verbose: print(path)
         model.load_state_dict(torch.load(path + '.pth', map_location=torch.device(training_set.device),weights_only=True))
@@ -24,11 +24,10 @@ def learn_motifs(model,training_set,testing_set,training_parameters,path,metric_
         elif len(loaded_metric_names) < len(metric_names):
             print(f' saved metrics : {loaded_metric_names}')
     else:
-        
         if training_parameters['loss_type'] == 'mse':
             criterion = torch.nn.MSELoss()
         elif training_parameters['loss_type'] == 'emd':
-            criterion = WassDist(zeros='same',normalize=training_parameters['normalize_input'])
+            criterion = WassDist(zeros='ignore',normalize=training_parameters['normalize_input'])
         elif training_parameters['loss_type'] == 'bce':
             criterion = torch.nn.BCELoss()
         

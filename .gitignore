@@ -6,3 +6,4 @@ figures/
 dev/__pycache__/
 dev/synthetic_data/
 synthetic_data/
+results/

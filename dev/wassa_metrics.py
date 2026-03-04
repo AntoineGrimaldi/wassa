@@ -2,29 +2,28 @@ import torch
 import numpy as np
 from wassa_utils import find_closest, correlation_latent_variables, correlation_kernels
 
-def torch_cdf_loss(reconstructed,input_seq,zeros,normalize):
+def torch_cdf_loss(reconstructed,input_seq,zeros='same',normalize=True):
     ''' Computes the 1D-Wasserstein distance along the last dimension of reconstructed and input_seq
         input_seq and reconstructed : BxNxT tensor where B is the number of batches, N the number of 
                                       neurons (or channels of the input) and T the number of timesteps
         zeros : treat neurons with no spike as informative ('same') or not ('ignore') -> nan
     '''
     assert reconstructed.shape == input_seq.shape
+
+
+    n_timesteps = reconstructed.shape[-1]
+    if normalize:
+        reconstructed = torch.nn.functional.normalize(reconstructed, p=1, dim=-1)
+        input_seq = torch.nn.functional.normalize(input_seq, p=1, dim=-1)
+        if zeros == 'same':
+            reconstructed[reconstructed.sum(dim=-1)==0], input_seq[input_seq.sum(dim=-1)==0] = 1/n_timesteps, 1/n_timesteps
+    if zeros == 'ignore':
+        reconstructed[reconstructed.sum(dim=-1)==0], input_seq[input_seq.sum(dim=-1)==0] = torch.nan, torch.nan
     
     cdf_reconstructed = torch.cumsum(reconstructed,dim=-1)
     cdf_input = torch.cumsum(input_seq,dim=-1)
-
-    if normalize:
-        norm_rec = cdf_reconstructed[:,:,-1].clone().unsqueeze(-1).repeat(1,1,reconstructed.shape[-1])
-        norm_seq = cdf_input[:,:,-1].clone().unsqueeze(-1).repeat(1,1,input_seq.shape[-1])
-        if zeros == 'same':
-            norm_rec[norm_rec==0], norm_seq[norm_seq==0] = 1, 1
-        elif zeros == 'ignore':
-            norm_rec[norm_rec==0], norm_seq[norm_seq==0] = torch.nan, torch.nan
-        cdf_input.div_(norm_seq), cdf_reconstructed.div_(norm_rec)
-    elif zeros == 'ignore':
-        norm_rec[norm_rec.sum(dim=-1)==0], norm_seq[norm_seq.sum(dim=-1)==0] = torch.nan, torch.nan
-    cdf_distance = torch.mean(torch.abs(cdf_input-cdf_reconstructed),dim=-1)
-    return cdf_distance
+    
+    return torch.nanmean(torch.abs(cdf_input-cdf_reconstructed),dim=-1)
 
 class WassDist(torch.nn.Module):
     def __init__(self,zeros='same',normalize=True):
