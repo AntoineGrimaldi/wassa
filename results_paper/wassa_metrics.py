@@ -57,7 +57,7 @@ def kernels_diff(true_kernels, learnt_kernels, metric, norm = None):
     elif metric == 'emd':
         true_matrix = true_kernels.unsqueeze(0).repeat(n_kernels,1,1,1)
         learnt_matrix = learnt_kernels.unsqueeze(1).repeat(1,n_motifs,1,1)
-        error_matrix = torch_cdf_loss(true_matrix,learnt_matrix,'ignore',False).mean(axis=-1)
+        error_matrix = torch_cdf_loss(true_matrix,learnt_matrix,'same',False).mean(axis=-1)
 
     return find_closest(error_matrix,'min')
 
