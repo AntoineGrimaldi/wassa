@@ -5,7 +5,9 @@ default: results
 J=jupyter nbconvert  --ExecutePreprocessor.kernel_name=python3 --ExecutePreprocessor.timeout=0 --allow-errors --execute
 JN=$(J) --to notebook --inplace
 
-results: samples jitter noise dropout warping multi
+synthetic: samples jitter noise dropout warping
+
+allen: decoding
 
 samples:
 	$(JN) figure_2_num_samples.ipynb
@@ -32,6 +34,10 @@ dropout:
 	git commit -m 'results : dropout' figure_3_dropout.ipynb
 	git push
 allen: 
-	$(JN) allendataset_training_synthetic_data_traintest.ipynb
-	git commit -m 'results : allen ' allendataset_training_synthetic_data_traintest.ipynb
+	$(JN) annexe_allendataset_results_id_vs_ood.ipynb
+	git commit -m 'results : allen ' annexe_allendataset_results_id_vs_ood.ipynb
+	git push
+decoding: 
+	$(JN) figure_4_allendataset_decoding.ipynb
+	git commit -m 'results : allen ' figure_4_allendataset_decoding.ipynb
 	git push

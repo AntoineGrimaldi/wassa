@@ -27,7 +27,7 @@ def learn_motifs(model,training_set,testing_set,training_parameters,path,metric_
         if training_parameters['loss_type'] == 'mse':
             criterion = torch.nn.MSELoss()
         elif training_parameters['loss_type'] == 'emd':
-            criterion = WassDist(zeros='ignore',normalize=training_parameters['normalize_input'])
+            criterion = WassDist(zeros=training_parameters['zeros'],normalize=training_parameters['normalize_input'])
         elif training_parameters['loss_type'] == 'bce':
             criterion = torch.nn.BCELoss()
         

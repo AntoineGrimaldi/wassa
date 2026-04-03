@@ -26,16 +26,25 @@ def torch_cdf_loss(reconstructed,input_seq,zeros,normalize):
         cdf_reconstructed = torch.cumsum(reconstructed,dim=-1)
         cdf_input = torch.cumsum(input_seq,dim=-1)
 
-    return torch.nanmean(torch.abs(cdf_input-cdf_reconstructed),dim=-1)
+    return torch.abs(cdf_input-cdf_reconstructed)
 
 class WassDist(torch.nn.Module):
-    def __init__(self,zeros='ignore',normalize=True):
+    def __init__(self,zeros='ignore',normalize=True,reduction='mean'):
         super().__init__()
         self.zeros = zeros
         self.normalize = normalize
+        self.reduction = reduction
 
     def forward(self, target, input_seq):
-        return torch_cdf_loss(target,input_seq,self.zeros,self.normalize).nanmean()
+        if self.reduction == 'mean':
+            wassa = torch_cdf_loss(target,input_seq,self.zeros,self.normalize).nanmean()
+        elif self.reduction == 'sum':
+            wassa = torch_cdf_loss(target,input_seq,self.zeros,self.normalize).nansum()
+        elif self.reduction == 'none' and self.zeros == 'same':
+            wassa = torch_cdf_loss(target,input_seq,self.zeros,self.normalize)
+        else:
+            print('zeros cannot be ignored if reduction is none')
+        return wassa
 
 def kernels_diff(true_kernels, learnt_kernels, metric, norm = None):
 
@@ -55,22 +64,44 @@ def kernels_diff(true_kernels, learnt_kernels, metric, norm = None):
         learnt_matrix = learnt_kernels.flatten(start_dim=1).unsqueeze(1).repeat(1,n_motifs,1)
         error_matrix = ((true_matrix-learnt_matrix)**2).mean(axis=-1)
     elif metric == 'emd':
+        emd_loss = WassDist(zeros='same',normalize=True,reduction='none')
         true_matrix = true_kernels.unsqueeze(0).repeat(n_kernels,1,1,1)
         learnt_matrix = learnt_kernels.unsqueeze(1).repeat(1,n_motifs,1,1)
-        error_matrix = torch_cdf_loss(true_matrix,learnt_matrix,'same',False).mean(axis=-1)
+        error_matrix = emd_loss(true_matrix,learnt_matrix).mean(axis=(1,2))
 
     return find_closest(error_matrix,'min')
 
-def spike_times_diff(true_spike_times, estimated_spike_times):
+def normalize_times(kernel):
+
+    if isinstance(kernel[0], tuple):
+        times = np.array([t for (_, t) in kernel])
+    else:
+        times = np.array(kernel)
+
+    tmin = times.min()
+    tmax = times.max()
+    return (times - tmin) / (tmax - tmin)
+
+def spike_times_diff(true_spike_times, estimated_spike_times, min_warping_coef = 1):
     n_motifs, n_kernels = len(true_spike_times), len(estimated_spike_times)
     error_matrix = torch.inf*torch.ones([n_kernels,n_motifs])
     for m in range(n_motifs):
         for k in range(n_kernels):
-            diff = 0
-            for ind in range(len(true_spike_times[m])):
-                true_neuron, true_time = true_spike_times[m][ind]
-                estimated_time = estimated_spike_times[k][true_neuron]
-                diff += abs(true_time-estimated_time)
+            if min_warping_coef<1:
+                true_t_norm = normalize_times(true_spike_times[m])
+                estimated_t_norm = normalize_times(estimated_spike_times[k])
+                stretch_values = np.linspace(.5, 1.5, 10)
+                diff = np.inf
+                for s in stretch_values:
+                    error = np.sum(np.abs(true_t_norm - estimated_t_norm*s))
+                    if error < diff:
+                        diff = error
+            else:
+                diff = 0
+                for ind in range(len(true_spike_times[m])):
+                    true_neuron, true_time = true_spike_times[m][ind]
+                    estimated_time = estimated_spike_times[k][true_neuron]
+                    diff += abs(true_time-estimated_time)
             error_matrix[k,m] = diff/len(true_spike_times[m])
     return find_closest(error_matrix,'min')
 
@@ -110,7 +141,7 @@ def get_similarity(sm, autoencoder, testset_input, metric_names, spike_times=Non
             results[ind_m] = correlation_mean_timings(mean_timings, learnt_weights,norm=1)
         if metric=='mean time diff':
             if spike_times is not None:
-                results[ind_m] = spike_times_diff(true_spike_times, spike_times)
+                results[ind_m] = spike_times_diff(true_spike_times, spike_times, min_warping_coef = sm.opt['min_warping_coef'])
             else:
                 print('no spike times')
         if metric == 'mse':

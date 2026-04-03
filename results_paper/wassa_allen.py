@@ -36,6 +36,7 @@ def make_allen_dataset(dataset_path, number_samples_per_image=10, number_folds=5
 
 def reconstruction_comparison(dataset_name,training_parameters,metric_names,frs=False,saving_path = 'results/allen_',device='cpu'):
 
+
     mse_loss = torch.nn.MSELoss()
     emd_loss = WassDist(zeros='same',normalize=training_parameters['normalize_input'])
 
